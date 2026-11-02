@@ -1,0 +1,75 @@
+{
+  "name": "ram-optimizer",
+  "productName": "RAM Optimizer",
+  "version": "1.0.0",
+  "description": "Electron-app die je RAM vrijmaakt en zorgt dat apps niet meer automatisch opstarten.",
+  "main": "src/main.js",
+  "author": {
+    "name": "Jason Mohab-Ali",
+    "url": "https://jasonmohabali.com"
+  },
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "icon": "node scripts/make-icon.mjs",
+    "dist": "npm run icon && electron-builder --linux AppImage",
+    "dist:dir": "npm run icon && electron-builder --linux dir"
+  },
+  "devDependencies": {
+    "electron": "^45.2.1",
+    "electron-builder": "^26.18.0"
+  },
+  "build": {
+    "appId": "nl.local.ramoptimizer",
+    "productName": "RAM Optimizer",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "src/**/*",
+      "package.json",
+      "docs/**/*",
+      "!node_modules/**/*"
+    ],
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "category": "Utility",
+      "icon": "build/icon.png",
+      "desktop": {
+        "entry": {
+          "Name": "RAM Optimizer",
+          "Comment": "Optimaliseer je RAM en voorkom dat apps automatisch opstarten",
+          "Categories": "Utility;System;"
+        }
+      },
+      "executableName": "ram-optimizer",
+      "synopsis": "Optimaliseer je RAM en voorkom dat apps automatisch opstarten",
+      "syncDesktopName": true
+    }
+  },
+  "dependencies": {},
+  "desktopName": "ram-optimizer.desktop",
+  "homepage": "https://jasonmohabali.com",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jsnmhbl/LINUX-RAM-OPTIMIZER.git"
+  },
+  "bugs": {
+    "url": "https://github.com/jsnmhbl/LINUX-RAM-OPTIMIZER/issues"
+  },
+  "keywords": [
+    "linux",
+    "ram",
+    "memory",
+    "electron",
+    "optimizer",
+    "performance",
+    "autostart",
+    "pop-os",
+    "cosmic"
+  ]
+}

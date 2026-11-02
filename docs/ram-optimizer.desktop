@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=RAM Optimizer
+GenericName=RAM Optimalisatie
+Comment=Vrij geheugen terugwinnen en auto-start uitschakelen
+Exec=/home/jasonmohabali/AppImages/RAM-Optimizer.AppImage %U
+Icon=ram-optimizer
+Terminal=false
+Categories=Utility;System;
+Keywords=ram;memory;optimalisatie;performance;autostart;
+StartupNotify=true
+StartupWMClass=ram-optimizer
