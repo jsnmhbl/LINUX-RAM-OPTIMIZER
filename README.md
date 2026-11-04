@@ -34,11 +34,24 @@ niemand gebruikt. Deze app doet in één klik wat je zelf ook zou doen:
 
 Alles is **volledig terug te draaien** met één knop: *Herstel*.
 
+Daarnaast is de app uitgebreid met drie overzichten:
+
+- **Programma's** — zie welke programma's je hebt (Flatpak, snap, AppImage en
+  eigen programma's), selecteer ze en verwijder ze.
+- **Poorten** — zie welke open poorten er draaien, welk proces ze vasthoudt en
+  welke poorten ook vanaf andere machines bereikbaar zijn.
+- **Auto-start** — zie alles wat bij het opstarten meeloopt en zet het per
+  item aan of uit.
+
 ## Screenshots
 
 | Dashboard | Na optimalisatie | Auto-start status |
 |---|---|---|
 | ![Dashboard](docs/screenshots/01-dashboard.png) | ![Optimalisatie](docs/screenshots/02-optimalisatie.png) | ![Auto-start](docs/screenshots/03-autostart-status.png) |
+
+| Programma's | Open poorten | Auto-start overzicht |
+|---|---|---|
+| ![Programma's](docs/screenshots/04-programmas.png) | ![Poorten](docs/screenshots/05-poorten.png) | ![Auto-start](docs/screenshots/06-autostart-overzicht.png) |
 
 ## Installatie
 
@@ -68,7 +81,57 @@ update-desktop-database ~/.local/share/applications 2>/dev/null
 Met de schakelaar **Auto-run bij start** wordt de optimalisatie automatisch
 uitgevoerd zodra je de app opent. Elke stap is uitvinkbaar.
 
+Daarnaast zijn er drie tabbladen:
+
+- **Programma's** — zoek, selecteer en verwijder programma's. AppImage en eigen
+  programma's gaan naar de prullenbak, flatpak en snap via hun pakketbeheer.
+- **Poorten** — zie wat er open staat. Zet *Alleen poorten die van buiten
+  bereikbaar zijn* aan om te filteren op risicovolle poorten.
+- **Auto-start** — per item aan of uitzetten, of in één keer alles uitschakelen.
+  *Herstel* zet alles weer terug.
+
 ## Wat er technisch gebeurt
+
+### Programma's verwijderen
+
+De app kijkt op vier plekken:
+
+| Bron | Herkennen | Verwijderen |
+|---|---|---|
+| Flatpak | `flatpak list --app` | `flatpak uninstall` (systeem-apps via `pkexec`) |
+| snap | `snap list` | `snap remove` via `pkexec` |
+| AppImage | AppImage-magic bytes in `~/AppImages`, `~/Applications`, `~/appimages`, `~/apps` en `~/.local/bin` | naar de XDG-prullenbak |
+| Eigen programma's | desktop-bestanden in `~/.local/share/applications` die naar je eigen map wijzen | naar de XDG-prullenbak |
+
+Bij AppImage en eigen programma's wordt het bestand **niet gewist maar naar de
+prullenbak verplaatst** (`~/.local/share/Trash/files` + `.trashinfo`), inclusief
+de bijbehorende snelkoppelingen. Alles buiten je eigen homedirectory wordt
+geweigerd, en de RAM Optimizer zelf kan zichzelf niet verwijderen.
+
+### Open poorten
+
+De scan gebruikt `ss -H -tulnpe` en koppelt socket-inodes aan eigen processen
+via `/proc/<pid>/fd`. Zonder `ss` wordt teruggevallen op `/proc/net/tcp{,6}` en
+`/proc/net/udp{,6}`. Elke poort krijgt een label:
+
+| Label | Betekenis |
+|---|---|
+| `exposed` | luistert op alle netwerkkaarten — dus bereikbaar vanaf andere machines |
+| `lokaal` | alleen vanaf deze machine bereikbaar (`127.0.0.1` / `::1`) |
+| `LAN-IP` | alleen op een specifiek lokaal IP |
+
+### Auto-start
+
+Auto-start items worden dynamisch opgepakt, niet uit een vaste lijst:
+
+| Soort | Herkennen | Uitschakelen |
+|---|---|---|
+| Eigen desktop-items | `~/.config/autostart/*.desktop` | `Hidden=true` in het bestand zelf, origineel bewaard in `~/.config/autostart/disabled-by-ram-opt/` |
+| Systeem desktop-items | `/etc/xdg/autostart/*.desktop` | shadow-bestand in `~/.config/autostart/` — geen root nodig |
+| systemd user units | `systemctl --user list-unit-files --state=enabled` | `disable --now` (+ `mask` bij timers) |
+
+Alles wat je hier uitzet staat in `~/.local/state/ram-optimizer/autostart-state.json`
+en wordt door *Herstel* weer aangezet.
 
 ### Chrome
 
@@ -105,8 +168,13 @@ Originele bestanden worden bewaard in:
 | `~/.config/google-chrome/Local State.bak-ram-opt` | Originele Chrome Local State |
 | `~/.config/autostart/disabled-by-ram-opt/*.orig` | Originele auto-start-bestanden |
 | `~/.config/systemd/user/disabled-services/*.disabled` | Originele unit-bestanden |
+| `~/.local/state/ram-optimizer/autostart-state.json` | Welke auto-start items zijn uitgezet |
 
 Rapporten van elke run komen in `~/.local/state/ram-optimizer/`.
+
+Verwijderde programma's (AppImage en eigen programma's) komen in de
+XDG-prullenbak: `~/.local/share/Trash/files/` met een `.trashinfo` in
+`~/.local/share/Trash/info/`.
 
 ## Beveiliging
 
@@ -115,8 +183,12 @@ Rapporten van elke run komen in `~/.local/state/ram-optimizer/`.
 - Alle commando's lopen via `execFile` met argument-arrays — geen
   shell-interpolatie, dus geen injectie via bestandsnamen.
 - Alleen het profiel van de huidige gebruiker wordt aangeraakt.
-- Root is alleen nodig voor de swap-stap, en die loopt via `pkexec` met een
-  echt systeem-wachtwoordvenster.
+- Verwijderen kan alleen binnen je eigen homedirectory; bestanden daarbuiten
+  worden geweigerd en de RAM Optimizer zelf kan zichzelf niet verwijderen.
+- Programma's die je verwijdert gaan naar de XDG-prullenbak, dus te herstellen.
+- Root is alleen nodig voor de swap-stap, voor system-flatpaks en voor het
+  verwijderen van snaps — die lopen via `pkexec` met een echt
+  systeem-wachtwoordvenster.
 
 ## Ontwikkelen
 
@@ -144,9 +216,18 @@ Levert `~/AppImages/RAM-Optimizer.AppImage`.
 src/main.js           Electron main-proces, IPC, window
 src/preload.js        Beperkte brug (contextBridge, sandboxed)
 src/optimizer.js      Alle logica: scan, optimalisatie, herstel
+src/programs.js       Programma-overzicht en verwijderen (flatpak/snap/AppImage)
+src/autostart.js      Auto-start overzicht, aan/uit zetten en herstellen
+src/network.js        Open poorten scannen
 src/renderer/         Interface (HTML/CSS/JS, geen framework)
 scripts/make-icon.mjs Genereert build/icon.png zonder externe tools
 docs/                 Banner en screenshots
+```
+
+Ontwikkelhulp:
+
+```bash
+npx electron . --screenshot /tmp/scherm.png --tab=poorten
 ```
 
 ## Licentie

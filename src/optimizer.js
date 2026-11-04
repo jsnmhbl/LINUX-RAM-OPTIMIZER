@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
+const autostart = require('./autostart');
 
 const HOME = os.homedir();
 const CHROME_DIR = path.join(HOME, '.config', 'google-chrome');
@@ -580,6 +581,16 @@ async function restore({ onEvent }) {
     }
   }
   results.push({ label: 'Chrome-instellingen', status: 'ok', message: 'Teruggezet naar origine' });
+
+  // Auto-start items die via de Auto-start-tab zijn uitgezet terugzetten.
+  try {
+    const restored = await autostart.restoreAll();
+    for (const item of restored) {
+      results.push({ label: item.label, status: item.status, message: item.message });
+    }
+  } catch (error) {
+    results.push({ label: 'Auto-start', status: 'warn', message: `Herstel mislukt: ${error.message}` });
+  }
 
   log('Herstel voltooid');
   await fsp.mkdir(REPORT_DIR, { recursive: true });

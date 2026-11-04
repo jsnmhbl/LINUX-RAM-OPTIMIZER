@@ -22,6 +22,35 @@ const els = {
   stepsPill: $('steps-pill'),
   autostartList: $('autostart-list'),
   log: $('log'),
+
+  tabs: $('tabs'),
+  tabCountPrograms: $('tab-count-programs'),
+  tabCountPorts: $('tab-count-ports'),
+  tabCountAutostart: $('tab-count-autostart'),
+
+  programList: $('program-list'),
+  programsPill: $('programs-pill'),
+  programsStatus: $('programs-status'),
+  programSearch: $('program-search'),
+  btnProgramsRefresh: $('btn-programs-refresh'),
+  btnProgramsSelect: $('btn-programs-select'),
+  btnProgramsRemove: $('btn-programs-remove'),
+
+  portList: $('port-list'),
+  portStats: $('port-stats'),
+  portsPill: $('ports-pill'),
+  portsStatus: $('ports-status'),
+  portSearch: $('port-search'),
+  portsExposedOnly: $('ports-exposed-only'),
+  btnPortsRefresh: $('btn-ports-refresh'),
+
+  autostartListFull: $('autostart-list-full'),
+  autostartPill: $('autostart-pill'),
+  autostartStatus: $('autostart-status'),
+  autostartSearch: $('autostart-search'),
+  autostartFilter: $('autostart-filter'),
+  btnAutostartRefresh: $('btn-autostart-refresh'),
+  btnAutostartDisableAll: $('btn-autostart-disable-all'),
 };
 
 const STEP_META = [
@@ -57,8 +86,23 @@ const STEP_META = [
   },
 ];
 
+const SOURCE_LABEL = {
+  flatpak: 'Flatpak',
+  snap: 'Snap',
+  appimage: 'AppImage',
+  desktop: 'App',
+};
+
 const running = { active: false };
 const logLines = [];
+const state = {
+  programs: [],
+  programSummary: {},
+  ports: [],
+  portSummary: {},
+  autostart: [],
+  autostartSummary: {},
+};
 
 /* ------------------------------- hulpjes ------------------------------- */
 
@@ -95,6 +139,69 @@ function paintLog() {
   }
   els.log.scrollTop = els.log.scrollHeight;
 }
+
+function setStatus(element, message, cls = '') {
+  element.textContent = message || '';
+  element.className = `panel-status${cls ? ` ${cls}` : ''}`;
+}
+
+function badge(text, kind) {
+  const span = document.createElement('span');
+  span.className = `badge ${kind}`;
+  span.textContent = text;
+  return span;
+}
+
+function entryRow() {
+  const li = document.createElement('li');
+  li.className = 'entry';
+  return li;
+}
+
+function entryMain(title, sub) {
+  const main = document.createElement('div');
+  main.className = 'entry-main';
+  const titleEl = document.createElement('div');
+  titleEl.className = 'entry-title';
+  titleEl.textContent = title;
+  main.appendChild(titleEl);
+  if (sub) {
+    const subEl = document.createElement('div');
+    subEl.className = 'entry-sub';
+    subEl.textContent = sub;
+    main.appendChild(subEl);
+  }
+  return main;
+}
+
+/* -------------------------------- tabs -------------------------------- */
+
+const loaded = { programs: false, ports: false, autostart: false };
+
+function showTab(name) {
+  for (const tab of els.tabs.querySelectorAll('.tab')) {
+    const active = tab.dataset.tab === name;
+    tab.classList.toggle('is-active', active);
+    tab.setAttribute('aria-selected', active ? 'true' : 'false');
+  }
+  for (const panel of document.querySelectorAll('.panel')) {
+    const active = panel.dataset.panel === name;
+    panel.classList.toggle('is-active', active);
+    panel.hidden = !active;
+  }
+  if (name === 'programs' && !loaded.programs) loadPrograms();
+  if (name === 'ports' && !loaded.ports) loadPorts();
+  if (name === 'autostart' && !loaded.autostart) loadAutostart();
+}
+
+els.tabs.addEventListener('click', (event) => {
+  const tab = event.target.closest('.tab');
+  if (!tab) return;
+  showTab(tab.dataset.tab);
+});
+
+// Ontwikkelhulp: de main-proces kan een tabblad opvragen (bv. voor screenshots).
+window.ram.onShowTab((tab) => showTab(tab));
 
 /* -------------------------------- scan -------------------------------- */
 
@@ -171,11 +278,11 @@ function renderAutostart(scan) {
     name.textContent = item.label;
     name.title = `${item.file} (${item.source})`;
 
-    const badge = document.createElement('span');
-    badge.className = `badge ${item.disabled ? 'off' : 'on'}`;
-    badge.textContent = item.disabled ? 'uit' : 'aan';
+    const badgeEl = document.createElement('span');
+    badgeEl.className = `badge ${item.disabled ? 'off' : 'on'}`;
+    badgeEl.textContent = item.disabled ? 'uit' : 'aan';
 
-    li.append(name, badge);
+    li.append(name, badgeEl);
     els.autostartList.appendChild(li);
   }
   for (const unit of scan.units) {
@@ -185,12 +292,12 @@ function renderAutostart(scan) {
     name.textContent = unit.label;
     name.title = unit.unit;
 
-    const badge = document.createElement('span');
+    const badgeEl = document.createElement('span');
     const off = unit.state === 'disabled' || unit.state === 'masked';
-    badge.className = `badge ${off ? (unit.state === 'masked' ? 'masked' : 'off') : 'on'}`;
-    badge.textContent = unit.state === 'masked' ? 'masked' : off ? 'uit' : 'aan';
+    badgeEl.className = `badge ${off ? (unit.state === 'masked' ? 'masked' : 'off') : 'on'}`;
+    badgeEl.textContent = unit.state === 'masked' ? 'masked' : off ? 'uit' : 'aan';
 
-    li.append(name, badge);
+    li.append(name, badgeEl);
     els.autostartList.appendChild(li);
   }
 }
@@ -332,6 +439,8 @@ async function runRestore() {
       log(`  ✓ ${item.label} — ${item.message}`, item.status === 'ok' ? 'ok' : 'warn');
     }
     log('Herstel voltooid.', 'ok');
+    loaded.autostart = false;
+    if (!document.querySelector('.panel[data-panel="autostart"]').hidden) loadAutostart();
   } catch (error) {
     log(`Herstel mislukt: ${error.message}`, 'err');
   } finally {
@@ -339,6 +448,385 @@ async function runRestore() {
     await refreshScan();
   }
 }
+
+/* ------------------------------ programma's --------------------------- */
+
+function selectedPrograms() {
+  return [...els.programList.querySelectorAll('.entry-check:checked')].map((input) => ({
+    source: input.dataset.source,
+    id: input.dataset.id,
+    desktopEntries: (input.dataset.desktops || '').split(',').filter(Boolean),
+  }));
+}
+
+function updateProgramButton() {
+  const count = selectedPrograms().length;
+  els.btnProgramsRemove.disabled = count === 0;
+  els.btnProgramsRemove.textContent = count ? `Verwijderen (${count})` : 'Verwijderen';
+}
+
+function renderPrograms() {
+  const term = els.programSearch.value.trim().toLowerCase();
+  const list = state.programs.filter(
+    (p) =>
+      !term ||
+      p.name.toLowerCase().includes(term) ||
+      (p.detail || '').toLowerCase().includes(term) ||
+      (p.version || '').toLowerCase().includes(term)
+  );
+
+  els.programList.innerHTML = '';
+  for (const program of list) {
+    const li = entryRow();
+
+    const check = document.createElement('input');
+    check.type = 'checkbox';
+    check.className = 'entry-check';
+    check.dataset.source = program.source;
+    check.dataset.id = program.id;
+    check.dataset.desktops = (program.desktopEntries || []).join(',');
+    check.disabled = !program.removable;
+    check.addEventListener('change', updateProgramButton);
+
+    const sub = [program.detail, program.version ? `v${program.version}` : null].filter(Boolean).join(' · ');
+
+    li.append(check, entryMain(program.name, sub));
+    li.append(badge(SOURCE_LABEL[program.source] || program.source, program.source));
+
+    const size = document.createElement('span');
+    size.className = 'entry-size';
+    size.textContent = program.formatSize || '';
+    li.append(size);
+
+    if (!program.removable) {
+      li.append(badge('beschermd', 'masked'));
+    }
+
+    els.programList.appendChild(li);
+  }
+
+  if (!list.length) {
+    const empty = document.createElement('li');
+    empty.className = 'entry entry-empty';
+    empty.textContent = state.programs.length ? 'Geen programma’s gevonden.' : 'Geen programma’s gevonden.';
+    els.programList.appendChild(empty);
+  }
+
+  const summary = state.programSummary;
+  els.programsPill.textContent = `${summary.total || 0} gevonden · ${summary.flatpak || 0} flatpak · ${summary.snap || 0} snap · ${summary.appimage || 0} appimage`;
+  els.tabCountPrograms.textContent = summary.total || '';
+  updateProgramButton();
+}
+
+async function loadPrograms() {
+  setStatus(els.programsStatus, 'Programma’s worden opgehaald…');
+  try {
+    const data = await window.ram.listPrograms();
+    state.programs = data.programs;
+    state.programSummary = data.summary;
+    loaded.programs = true;
+    renderPrograms();
+    setStatus(els.programsStatus, '');
+  } catch (error) {
+    setStatus(els.programsStatus, `Ophalen mislukt: ${error.message}`, 'err');
+  }
+}
+
+async function removeSelectedPrograms() {
+  const items = selectedPrograms();
+  if (!items.length) return;
+
+  const names = items.map((item) => state.programs.find((p) => p.id === item.id)?.name || item.id);
+  const needsAdmin = items.some((item) => item.source === 'snap');
+  const ok = await window.ram.confirm({
+    title: 'Programma’s verwijderen',
+    message: `${items.length} programma’s verwijderen?`,
+    detail:
+      `${names.slice(0, 6).join(', ')}${names.length > 6 ? `, +${names.length - 6} meer` : ''}\n\n` +
+      'Flatpak en snap worden via hun pakketbeheer verwijderd' +
+      (needsAdmin ? ' — voor snap wordt om je wachtwoord gevraagd.' : '.') +
+      '\nAppImage en eigen programma’s gaan naar de prullenbak, dus je kunt ze terughalen.',
+  });
+  if (!ok) return;
+
+  setStatus(els.programsStatus, 'Bezig met verwijderen…');
+  try {
+    const result = await window.ram.removePrograms(items);
+    const failed = result.results.filter((r) => r.status !== 'ok');
+    if (failed.length) {
+      setStatus(els.programsStatus, `${result.removed} verwijderd, ${failed.length} mislukt: ${failed[0].message}`, 'warn');
+    } else {
+      setStatus(els.programsStatus, `${result.removed} programma’s verwijderd.`, 'ok');
+    }
+    log(`${result.removed} programma’s verwijderd.`, 'ok');
+    await loadPrograms();
+  } catch (error) {
+    setStatus(els.programsStatus, `Verwijderen mislukt: ${error.message}`, 'err');
+  }
+}
+
+els.btnProgramsRemove.addEventListener('click', removeSelectedPrograms);
+els.btnProgramsRefresh.addEventListener('click', () => {
+  loaded.programs = false;
+  loadPrograms();
+});
+els.btnProgramsSelect.addEventListener('click', () => {
+  const checks = [...els.programList.querySelectorAll('.entry-check:not(:disabled)')];
+  const allChecked = checks.every((input) => input.checked);
+  for (const input of checks) input.checked = !allChecked;
+  updateProgramButton();
+});
+els.programSearch.addEventListener('input', renderPrograms);
+
+/* -------------------------------- poorten ----------------------------- */
+
+function renderPorts() {
+  const term = els.portSearch.value.trim().toLowerCase();
+  const exposedOnly = els.portsExposedOnly.checked;
+  const list = state.ports.filter((port) => {
+    if (exposedOnly && port.scope !== 'exposed') return false;
+    if (!term) return true;
+    return (
+      String(port.port).includes(term) ||
+      (port.process || '').toLowerCase().includes(term) ||
+      port.host.toLowerCase().includes(term)
+    );
+  });
+
+  els.portList.innerHTML = '';
+  for (const port of list) {
+    const li = entryRow();
+    const number = document.createElement('span');
+    number.className = 'port-num';
+    number.textContent = port.port;
+
+    const proto = document.createElement('span');
+    proto.className = 'port-proto';
+    proto.textContent = port.proto;
+
+    const sub = port.process
+      ? `${port.process}${port.pid ? ` · pid ${port.pid}` : ''}`
+      : port.unit
+        ? `${port.unit} · systemd`
+        : 'onbekend proces';
+
+    li.append(number, proto, entryMain(port.address, sub));
+
+    const scopeKind = port.scope === 'exposed' ? 'on' : port.scope === 'localhost' ? 'off' : 'masked';
+    const scopeLabel =
+      port.scope === 'exposed' ? 'exposed' : port.scope === 'localhost' ? 'lokaal' : port.scope;
+    li.append(badge(scopeLabel, scopeKind));
+
+    els.portList.appendChild(li);
+  }
+
+  if (!list.length) {
+    const empty = document.createElement('li');
+    empty.className = 'entry entry-empty';
+    empty.textContent = 'Geen poorten gevonden.';
+    els.portList.appendChild(empty);
+  }
+
+  const summary = state.portSummary;
+  els.portsPill.textContent = `${summary.total || 0} open`;
+  els.tabCountPorts.textContent = summary.total || '';
+
+  els.portStats.innerHTML = '';
+  const stats = [
+    ['Open poorten', summary.total || 0],
+    ['Exposed', summary.exposed || 0],
+    ['Lokaal', summary.localhost || 0],
+    ['Op LAN-IP', summary.lan || 0],
+    ['Process bekend', summary.withProcess || 0],
+  ];
+  for (const [label, value] of stats) {
+    const li = document.createElement('li');
+    const span = document.createElement('span');
+    span.textContent = label;
+    const strong = document.createElement('strong');
+    strong.textContent = value;
+    li.append(span, strong);
+    els.portStats.appendChild(li);
+  }
+}
+
+async function loadPorts() {
+  setStatus(els.portsStatus, 'Poorten worden opgehaald…');
+  try {
+    const data = await window.ram.listPorts();
+    state.ports = data.ports;
+    state.portSummary = data.summary;
+    loaded.ports = true;
+    renderPorts();
+    setStatus(els.portsStatus, `Bron: ${data.source === 'ss' ? 'ss' : '/proc/net'} · ${data.summary.exposed} exposed`);
+  } catch (error) {
+    setStatus(els.portsStatus, `Ophalen mislukt: ${error.message}`, 'err');
+  }
+}
+
+els.btnPortsRefresh.addEventListener('click', () => {
+  loaded.ports = false;
+  loadPorts();
+});
+els.portSearch.addEventListener('input', renderPorts);
+els.portsExposedOnly.addEventListener('change', renderPorts);
+
+/* ------------------------------ auto-start ---------------------------- */
+
+function visibleAutostart() {
+  const term = els.autostartSearch.value.trim().toLowerCase();
+  const filter = els.autostartFilter.value;
+  return state.autostart.filter((entry) => {
+    if (term && !entry.name.toLowerCase().includes(term)) return false;
+    if (filter === 'enabled' && !entry.enabled) return false;
+    if (filter === 'disabled' && entry.enabled) return false;
+    if (filter === 'desktop' && entry.kind !== 'desktop') return false;
+    if (filter === 'unit' && entry.kind !== 'unit') return false;
+    return true;
+  });
+}
+
+function renderAutostartFull() {
+  const list = visibleAutostart();
+  els.autostartListFull.innerHTML = '';
+
+  for (const entry of list) {
+    const li = entryRow();
+
+    const sub = [];
+    if (entry.kind === 'desktop') {
+      sub.push(entry.source === 'gebruiker' ? 'eigen map' : 'systeem');
+      if (entry.exec) sub.push(entry.exec);
+      if (entry.executableMissing) sub.push('programma ontbreekt');
+    } else {
+      sub.push(entry.unitType);
+      if (entry.active && entry.active !== 'inactive') sub.push(`actief: ${entry.active}`);
+      if (entry.nextRun) sub.push(`volgende run: ${entry.nextRun}`);
+    }
+
+    li.append(entryMain(entry.name, sub.filter(Boolean).join(' · ')));
+
+    if (entry.kind === 'desktop') {
+      li.append(badge(entry.source, entry.source === 'gebruiker' ? 'off' : 'masked'));
+    } else {
+      li.append(badge(entry.unitType, 'masked'));
+    }
+
+    if (entry.executableMissing) li.append(badge('verouderd', 'on'));
+
+    const label = document.createElement('label');
+    label.className = 'switch switch-sm';
+    label.title = entry.enabled ? 'Staat aan — klik om uit te schakelen' : 'Staat uit — klik om aan te zetten';
+
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.checked = entry.enabled;
+    input.disabled = Boolean(entry.protected);
+    input.addEventListener('change', () => toggleAutostart(entry, input));
+
+    const slider = document.createElement('span');
+    slider.className = 'slider';
+
+    const text = document.createElement('span');
+    text.className = 'switch-label';
+    text.textContent = entry.enabled ? 'aan' : 'uit';
+
+    label.append(input, slider, text);
+    li.append(label);
+
+    els.autostartListFull.appendChild(li);
+  }
+
+  if (!list.length) {
+    const empty = document.createElement('li');
+    empty.className = 'entry entry-empty';
+    empty.textContent = 'Niets gevonden.';
+    els.autostartListFull.appendChild(empty);
+  }
+
+  const summary = state.autostartSummary;
+  els.autostartPill.textContent = `${summary.enabled || 0} staan aan · ${summary.disabled || 0} uit`;
+  els.tabCountAutostart.textContent = summary.enabled || '';
+}
+
+async function toggleAutostart(entry, input) {
+  const enabled = input.checked;
+  input.disabled = true;
+  setStatus(els.autostartStatus, `${entry.name} wordt ${enabled ? 'ingeschakeld' : 'uitgeschakeld'}…`);
+  try {
+    const result = await window.ram.setAutostart({ kind: entry.kind, id: entry.id, enabled });
+    if (result.status === 'ok') {
+      entry.enabled = enabled;
+      setStatus(els.autostartStatus, result.message, 'ok');
+      log(`${result.message}`, 'ok');
+    } else {
+      setStatus(els.autostartStatus, result.message || 'Mislukt', 'err');
+    }
+  } catch (error) {
+    setStatus(els.autostartStatus, `Mislukt: ${error.message}`, 'err');
+  } finally {
+    input.disabled = Boolean(entry.protected);
+    loaded.autostart = false;
+    await loadAutostart();
+  }
+}
+
+async function disableAllAutostart() {
+  const targets = visibleAutostart().filter((entry) => entry.enabled && !entry.protected);
+  if (!targets.length) {
+    setStatus(els.autostartStatus, 'Niets om uit te schakelen.', 'warn');
+    return;
+  }
+  const ok = await window.ram.confirm({
+    title: 'Auto-start uitschakelen',
+    message: `${targets.length} items uitschakelen?`,
+    detail: 'Ze starten dan niet meer mee bij het opstarten. Met “Herstel” zet je ze terug.',
+  });
+  if (!ok) return;
+
+  setStatus(els.autostartStatus, 'Bezig…');
+  let done = 0;
+  const failed = [];
+  for (const entry of targets) {
+    try {
+      const result = await window.ram.setAutostart({ kind: entry.kind, id: entry.id, enabled: false });
+      if (result.status === 'ok') done += 1;
+      else failed.push(result.message);
+    } catch (error) {
+      failed.push(error.message);
+    }
+  }
+  setStatus(
+    els.autostartStatus,
+    failed.length ? `${done} uitgezet, ${failed.length} mislukt: ${failed[0]}` : `${done} items uitgezet.`,
+    failed.length ? 'warn' : 'ok'
+  );
+  log(`${done} auto-start items uitgezet.`, 'ok');
+  loaded.autostart = false;
+  await loadAutostart();
+}
+
+async function loadAutostart() {
+  setStatus(els.autostartStatus, 'Auto-start items worden opgehaald…');
+  try {
+    const data = await window.ram.listAutostart();
+    state.autostart = data.entries;
+    state.autostartSummary = data.summary;
+    loaded.autostart = true;
+    renderAutostartFull();
+    setStatus(els.autostartStatus, '');
+  } catch (error) {
+    setStatus(els.autostartStatus, `Ophalen mislukt: ${error.message}`, 'err');
+  }
+}
+
+els.btnAutostartRefresh.addEventListener('click', () => {
+  loaded.autostart = false;
+  loadAutostart();
+});
+els.btnAutostartDisableAll.addEventListener('click', disableAllAutostart);
+els.autostartSearch.addEventListener('input', renderAutostartFull);
+els.autostartFilter.addEventListener('change', renderAutostartFull);
 
 /* --------------------------------- start ------------------------------ */
 

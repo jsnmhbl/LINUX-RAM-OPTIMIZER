@@ -4,6 +4,9 @@ const { app, BrowserWindow, ipcMain, shell, dialog } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 const optimizer = require('./optimizer');
+const network = require('./network');
+const programs = require('./programs');
+const autostart = require('./autostart');
 
 const SETTINGS_FILE = path.join(app.getPath('userData'), 'settings.json');
 
@@ -28,6 +31,15 @@ function readSettings() {
 function writeSettings(settings) {
   fs.mkdirSync(path.dirname(SETTINGS_FILE), { recursive: true });
   fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2));
+}
+
+/** Lees een commando-regeloptie: `--naam waarde` of `--naam=waarde`. */
+function readArg(name) {
+  const inline = process.argv.find((arg) => arg.startsWith(`${name}=`));
+  if (inline) return inline.slice(name.length + 1);
+  const index = process.argv.indexOf(name);
+  if (index !== -1 && process.argv[index + 1]) return process.argv[index + 1];
+  return null;
 }
 
 function createWindow() {
@@ -55,15 +67,17 @@ function createWindow() {
     return { action: 'deny' };
   });
 
-  // Ontwikkelhulp: `electron . --screenshot=/pad/naar.png` maakt een screenshot en sluit af.
-  const shotIndex = process.argv.indexOf('--screenshot');
-  if (shotIndex !== -1 && process.argv[shotIndex + 1]) {
-    const target = process.argv[shotIndex + 1];
+  // Ontwikkelhulp: `electron . --screenshot /pad/naar.png` maakt een screenshot en sluit af.
+  // Met `--tab=poorten` springt hij eerst naar dat tabblad.
+  const shotTarget = readArg('--screenshot');
+  if (shotTarget) {
+    const tab = readArg('--tab');
     mainWindow.webContents.once('did-finish-load', async () => {
+      if (tab) mainWindow.webContents.send('ui:tab', tab);
       await new Promise((r) => setTimeout(r, 2500));
       const image = await mainWindow.webContents.capturePage();
-      fs.writeFileSync(target, image.toPNG());
-      console.log(`screenshot: ${target}`);
+      fs.writeFileSync(shotTarget, image.toPNG());
+      console.log(`screenshot: ${shotTarget}`);
       app.quit();
     });
   }
@@ -110,6 +124,24 @@ ipcMain.handle('settings:set', (_event, settings) => {
   const merged = { ...current, ...settings };
   writeSettings(merged);
   return merged;
+});
+
+ipcMain.handle('ports:list', () => network.listPorts());
+
+ipcMain.handle('programs:list', () => programs.listPrograms());
+
+ipcMain.handle('programs:remove', async (_event, payload) => {
+  const list = Array.isArray(payload?.programs) ? payload.programs : [];
+  if (!list.length) return { results: [], removed: 0 };
+  return programs.removePrograms(list);
+});
+
+ipcMain.handle('autostart:list', () => autostart.listAutostart());
+
+ipcMain.handle('autostart:set', async (_event, payload) => {
+  const { kind, id, enabled } = payload || {};
+  if (!kind || !id) return { status: 'error', message: 'Onbekend item' };
+  return autostart.setEnabled({ kind, id, enabled: Boolean(enabled) });
 });
 
 ipcMain.handle('report:open', async () => {

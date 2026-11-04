@@ -29,71 +29,196 @@
         </div>
       </header>
 
-      <main class="grid">
-        <div class="col col-left">
-          <section class="card card-ram">
+      <nav class="tabs" id="tabs" role="tablist">
+        <button class="tab is-active" data-tab="dashboard" role="tab" aria-selected="true">Dashboard</button>
+        <button class="tab" data-tab="programs" role="tab" aria-selected="false">
+          Programma's <span class="tab-count" id="tab-count-programs"></span>
+        </button>
+        <button class="tab" data-tab="ports" role="tab" aria-selected="false">
+          Poorten <span class="tab-count" id="tab-count-ports"></span>
+        </button>
+        <button class="tab" data-tab="autostart" role="tab" aria-selected="false">
+          Auto-start <span class="tab-count" id="tab-count-autostart"></span>
+        </button>
+      </nav>
+
+      <main class="grid" id="grid">
+        <!-- ------------------------------ dashboard ------------------------------ -->
+        <section class="panel panel-dashboard is-active" data-panel="dashboard" role="tabpanel">
+          <div class="col col-left">
+            <div class="card card-ram">
+              <div class="card-head">
+                <h2>Geheugen</h2>
+                <span class="pill" id="ram-pill">—</span>
+              </div>
+
+              <div class="ram-figure">
+                <span class="ram-used" id="ram-used">—</span>
+                <span class="ram-total">van <span id="ram-total">—</span> gebruikt</span>
+              </div>
+
+              <div class="bar" role="img" aria-label="Geheugenverdeling">
+                <div class="seg seg-used" id="seg-used"></div>
+                <div class="seg seg-cached" id="seg-cached"></div>
+                <div class="seg seg-free" id="seg-free"></div>
+              </div>
+
+              <ul class="stats">
+                <li><span>Beschikbaar</span><strong id="stat-available">—</strong></li>
+                <li><span>Vrij</span><strong id="stat-free">—</strong></li>
+                <li><span>Cache</span><strong id="stat-cached">—</strong></li>
+                <li><span>Swap</span><strong id="stat-swap">—</strong></li>
+              </ul>
+
+              <div class="card-head card-head-sub">
+                <h2>Grootste processen</h2>
+              </div>
+              <ul class="proc-list" id="proc-list"></ul>
+
+              <button id="btn-optimize" class="btn btn-primary btn-lg">
+                <span class="btn-label">Optimaliseer nu</span>
+                <span class="btn-hint">Start met de knop — alles draait in één keer</span>
+              </button>
+
+              <p class="autostart-note" id="autostart-note">
+                Controleert en schakelt uit: Chrome, ZapZap, OpenClaw Gateway, 7 auto-start apps en 5 update-timers.
+              </p>
+            </div>
+
+            <div class="card card-log">
+              <div class="card-head">
+                <h2>Log</h2>
+                <button id="btn-open-report" class="btn btn-ghost btn-sm">Rapportmap openen</button>
+              </div>
+              <pre class="log" id="log">Klaar. Klik op “Optimaliseer nu” om te beginnen.</pre>
+            </div>
+          </div>
+
+          <div class="col col-right">
+            <div class="card card-steps">
+              <div class="card-head">
+                <h2>Stappen</h2>
+                <span class="pill" id="steps-pill">—</span>
+              </div>
+
+              <ul class="steps" id="steps"></ul>
+
+              <div class="card-head card-head-sub">
+                <h2>Auto-start status</h2>
+              </div>
+              <ul class="autostart-list" id="autostart-list"></ul>
+            </div>
+          </div>
+        </section>
+
+        <!-- ------------------------------ programma's ---------------------------- -->
+        <section class="panel panel-wide" data-panel="programs" role="tabpanel" hidden>
+          <div class="card card-list">
             <div class="card-head">
-              <h2>Geheugen</h2>
-              <span class="pill" id="ram-pill">—</span>
+              <h2>Geïnstalleerde programma's</h2>
+              <span class="pill" id="programs-pill">—</span>
             </div>
 
-            <div class="ram-figure">
-              <span class="ram-used" id="ram-used">—</span>
-              <span class="ram-total">van <span id="ram-total">—</span> gebruikt</span>
+            <div class="toolbar">
+              <input
+                type="search"
+                id="program-search"
+                class="search"
+                placeholder="Zoek op naam of type…"
+                autocomplete="off"
+                spellcheck="false"
+              />
+              <button id="btn-programs-refresh" class="btn btn-ghost btn-sm">Vernieuwen</button>
+              <button id="btn-programs-select" class="btn btn-ghost btn-sm">Alles selecteren</button>
+              <button id="btn-programs-remove" class="btn btn-danger btn-sm" disabled>Verwijderen</button>
             </div>
 
-            <div class="bar" role="img" aria-label="Geheugenverdeling">
-              <div class="seg seg-used" id="seg-used"></div>
-              <div class="seg seg-cached" id="seg-cached"></div>
-              <div class="seg seg-free" id="seg-free"></div>
-            </div>
+            <p class="panel-status" id="programs-status"></p>
 
-            <ul class="stats">
-              <li><span>Beschikbaar</span><strong id="stat-available">—</strong></li>
-              <li><span>Vrij</span><strong id="stat-free">—</strong></li>
-              <li><span>Cache</span><strong id="stat-cached">—</strong></li>
-              <li><span>Swap</span><strong id="stat-swap">—</strong></li>
-            </ul>
+            <ul class="entry-list" id="program-list"></ul>
 
-            <div class="card-head card-head-sub">
-              <h2>Grootste processen</h2>
-            </div>
-            <ul class="proc-list" id="proc-list"></ul>
-
-            <button id="btn-optimize" class="btn btn-primary btn-lg">
-              <span class="btn-label">Optimaliseer nu</span>
-              <span class="btn-hint">Start met de knop — alles draait in één keer</span>
-            </button>
-
-            <p class="autostart-note" id="autostart-note">
-              Controleert en schakelt uit: Chrome, ZapZap, OpenClaw Gateway, 7 auto-start apps en 5 update-timers.
+            <p class="autostart-note">
+              Flatpak en snap verwijderen via hun pakketbeheer. AppImage en eigen programma's gaan naar de prullenbak,
+              dus je kunt ze terughalen.
             </p>
-          </section>
+          </div>
+        </section>
 
-          <section class="card card-log">
+        <!-- ------------------------------- poorten ------------------------------ -->
+        <section class="panel panel-wide" data-panel="ports" role="tabpanel" hidden>
+          <div class="card card-list">
             <div class="card-head">
-              <h2>Log</h2>
-              <button id="btn-open-report" class="btn btn-ghost btn-sm">Rapportmap openen</button>
+              <h2>Open poorten</h2>
+              <span class="pill" id="ports-pill">—</span>
             </div>
-            <pre class="log" id="log">Klaar. Klik op “Optimaliseer nu” om te beginnen.</pre>
-          </section>
-        </div>
 
-        <div class="col col-right">
-          <section class="card card-steps">
+            <div class="toolbar">
+              <input
+                type="search"
+                id="port-search"
+                class="search"
+                placeholder="Zoek op poort of proces…"
+                autocomplete="off"
+                spellcheck="false"
+              />
+              <label class="checkline">
+                <input type="checkbox" id="ports-exposed-only" />
+                <span>Alleen poorten die van buiten bereikbaar zijn</span>
+              </label>
+              <button id="btn-ports-refresh" class="btn btn-ghost btn-sm">Vernieuwen</button>
+            </div>
+
+            <p class="panel-status" id="ports-status"></p>
+
+            <ul class="stats stats-inline" id="port-stats"></ul>
+
+            <ul class="entry-list entry-list-ports" id="port-list"></ul>
+
+            <p class="autostart-note">
+              <strong>Exposed</strong> luistert op alle netwerkkaarten en is dus bereikbaar voor andere machines op je
+              netwerk. <strong>Lokaal</strong> is alleen vanaf deze machine bereikbaar.
+            </p>
+          </div>
+        </section>
+
+        <!-- ------------------------------ auto-start ---------------------------- -->
+        <section class="panel panel-wide" data-panel="autostart" role="tabpanel" hidden>
+          <div class="card card-list">
             <div class="card-head">
-              <h2>Stappen</h2>
-              <span class="pill" id="steps-pill">—</span>
+              <h2>Start mee bij het opstarten</h2>
+              <span class="pill" id="autostart-pill">—</span>
             </div>
 
-            <ul class="steps" id="steps"></ul>
-
-            <div class="card-head card-head-sub">
-              <h2>Auto-start status</h2>
+            <div class="toolbar">
+              <input
+                type="search"
+                id="autostart-search"
+                class="search"
+                placeholder="Zoek op naam…"
+                autocomplete="off"
+                spellcheck="false"
+              />
+              <select id="autostart-filter" class="select">
+                <option value="all">Alles</option>
+                <option value="enabled">Staat aan</option>
+                <option value="disabled">Staat uit</option>
+                <option value="desktop">Desktop-items</option>
+                <option value="unit">systemd-units</option>
+              </select>
+              <button id="btn-autostart-refresh" class="btn btn-ghost btn-sm">Vernieuwen</button>
+              <button id="btn-autostart-disable-all" class="btn btn-ghost btn-sm">Alles uitschakelen</button>
             </div>
-            <ul class="autostart-list" id="autostart-list"></ul>
-          </section>
-        </div>
+
+            <p class="panel-status" id="autostart-status"></p>
+
+            <ul class="entry-list" id="autostart-list-full"></ul>
+
+            <p class="autostart-note">
+              Uitschakelen gebeurt zonder root: desktop-items krijgen een eigen shadow-bestand en systemd-units worden
+              met <code>systemctl --user</code> uitgezet. Met <strong>Herstel</strong> zet je alles terug.
+            </p>
+          </div>
+        </section>
       </main>
     </div>
 
